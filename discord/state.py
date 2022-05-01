@@ -33,7 +33,6 @@ import logging
 import weakref
 import warnings
 import inspect
-import gc
 
 import os
 
@@ -208,11 +207,6 @@ class ConnectionState:
         self._private_channels_by_user = {}
         self._messages = self.max_messages and deque(maxlen=self.max_messages)
 
-        # In cases of large deallocations the GC should be called explicitly
-        # To free the memory more immediately, especially true when it comes
-        # to reconnect loops which cause mass allocations and deallocations.
-        gc.collect()
-
     def process_chunk_requests(self, guild_id, nonce, members, complete):
         removed = []
         for key, request in self._chunk_requests.items():
@@ -308,10 +302,6 @@ class ConnectionState:
             self._emojis.pop(emoji.id, None)
 
         del guild
-
-        # Much like clear(), if we have a massive deallocation
-        # then it's better to explicitly call the GC
-        gc.collect()
 
     @property
     def emojis(self):
@@ -1235,14 +1225,6 @@ class AutoShardedConnectionState(ConnectionState):
 
         self.dispatch('connect')
         self.dispatch('shard_connect', data['__shard_id__'])
-
-        # Much like clear(), if we have a massive deallocation
-        # then it's better to explicitly call the GC
-        # Note that in the original ready parsing code this was done
-        # implicitly via clear() but in the auto sharded client clearing
-        # the cache would have the consequence of clearing data on other
-        # shards as well.
-        gc.collect()
 
         if self._ready_task is None:
             self._ready_task = asyncio.ensure_future(self._delay_ready(), loop=self.loop)
